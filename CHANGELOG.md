@@ -1,5 +1,27 @@
 # Change Log
 
+## [2.0.2] - 2025-11-10
+
+### Added
+- **Debug logging**: Comprehensive output channel for debugging semantic token provider
+  - Shows activation status, token provider calls, and performance metrics
+  - Displays file processing stats (comments, tags, duration)
+  - Includes error messages and stack traces for troubleshooting
+- **Testing infrastructure**:
+  - `test-verification.php` - Interactive test file with inspection instructions
+  - `TESTING.md` - Complete guide for verifying semantic tokens vs TextMate grammar
+  - Step-by-step debugging procedures
+
+### Improved
+- Better user feedback on extension activation
+- Real-time visibility into token provider execution
+- Clear differentiation between semantic tokens and TextMate grammar highlighting
+
+### Developer Experience
+- Output panel shows every `provideDocumentSemanticTokens()` call
+- Performance metrics help identify bottlenecks
+- Test files include instructions for using VSCode's token inspector
+
 ## [2.0.1] - 2025-11-10
 
 ### Fixed

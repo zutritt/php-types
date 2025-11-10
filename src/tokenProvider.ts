@@ -12,9 +12,12 @@ import { TOKEN_TYPES, TOKEN_MODIFIERS, SemanticTokenType, SemanticTokenModifier 
  */
 export class PhpDocSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
   private readonly parser: PhpDocTypeParser;
+  private readonly outputChannel?: vscode.OutputChannel;
+  private callCount = 0;
 
-  constructor() {
+  constructor(outputChannel?: vscode.OutputChannel) {
     this.parser = new PhpDocTypeParser();
+    this.outputChannel = outputChannel;
   }
 
   /**
@@ -24,6 +27,16 @@ export class PhpDocSemanticTokensProvider implements vscode.DocumentSemanticToke
     document: vscode.TextDocument,
     token: vscode.CancellationToken
   ): vscode.ProviderResult<vscode.SemanticTokens> {
+    this.callCount++;
+    const startTime = Date.now();
+
+    if (this.outputChannel) {
+      this.outputChannel.appendLine('');
+      this.outputChannel.appendLine(`[Call #${this.callCount}] provideDocumentSemanticTokens()`);
+      this.outputChannel.appendLine(`  File: ${document.fileName}`);
+      this.outputChannel.appendLine(`  Lines: ${document.lineCount}`);
+    }
+
     const builder = new vscode.SemanticTokensBuilder(this.getLegend());
 
     try {
@@ -32,21 +45,52 @@ export class PhpDocSemanticTokensProvider implements vscode.DocumentSemanticToke
       // Find all PHPDoc comments
       const phpdocRegex = /\/\*\*[\s\S]*?\*\//g;
       let match: RegExpExecArray | null;
+      let commentCount = 0;
+      let tokenCount = 0;
 
       while ((match = phpdocRegex.exec(text)) !== null) {
         if (token.isCancellationRequested) {
+          if (this.outputChannel) {
+            this.outputChannel.appendLine(`  ⚠️  Cancelled by VSCode`);
+          }
           return null;
         }
 
+        commentCount++;
         const comment = match[0];
         const commentOffset = match.index;
 
         // Extract and process PHPDoc tags
+        const tokensBeforeCount = tokenCount;
         this.processPhpDocComment(comment, commentOffset, document, builder);
+
+        // Note: We can't easily track token count from builder, so we'll estimate
+        tokenCount += comment.split(/@(?:param|return|var|throws|property|extends|implements|template)/).length - 1;
       }
 
-      return builder.build();
+      const result = builder.build();
+      const duration = Date.now() - startTime;
+
+      if (this.outputChannel) {
+        this.outputChannel.appendLine(`  ✅ Success`);
+        this.outputChannel.appendLine(`  PHPDoc Comments: ${commentCount}`);
+        this.outputChannel.appendLine(`  Estimated Tags: ~${tokenCount}`);
+        this.outputChannel.appendLine(`  Duration: ${duration}ms`);
+      }
+
+      return result;
     } catch (error) {
+      const duration = Date.now() - startTime;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      if (this.outputChannel) {
+        this.outputChannel.appendLine(`  ❌ Error: ${errorMsg}`);
+        this.outputChannel.appendLine(`  Duration: ${duration}ms`);
+        if (error instanceof Error && error.stack) {
+          this.outputChannel.appendLine(`  Stack: ${error.stack}`);
+        }
+      }
+
       console.error('Error providing semantic tokens:', error);
       return builder.build();
     }
