@@ -2,3 +2,9 @@
 .vscode-test/**
 .gitignore
 vsc-extension-quickstart.md
+src/**
+tsconfig.json
+node_modules/**
+.git/**
+*.log
+INVESTIGATION_AND_SOLUTION.md

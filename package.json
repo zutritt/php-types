@@ -3,7 +3,7 @@
   "displayName": "PHP Doc Extended",
   "description": "PHP Doc Extended with generics, templates, inheritance and more.",
   "icon": "res/icon.png",
-  "version": "1.5.0",
+  "version": "2.0.0",
   "publisher": "ErnstStavroBlofeld",
   "repository": {
     "url": "https://github.com/ErnstStavroBlofeld/php-types"
@@ -13,6 +13,10 @@
   },
   "categories": [
     "Programming Languages"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:php"
   ],
   "contributes": {
     "languages": [
@@ -30,5 +34,19 @@
         "path": "./syntaxes/php.tmLanguage.json"
       }
     ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile"
+  },
+  "dependencies": {
+    "@rightcapital/phpdoc-parser": "^0.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.72.0",
+    "typescript": "^5.0.0"
   }
 }
