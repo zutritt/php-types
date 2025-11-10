@@ -61,96 +61,179 @@ export class PhpDocSemanticTokensProvider implements vscode.DocumentSemanticToke
     document: vscode.TextDocument,
     builder: vscode.SemanticTokensBuilder
   ): void {
-    // PHPDoc tags that contain type information
-    const typeTagPatterns = [
-      // @param Type $name Description
-      /@param\s+([^\s$]+)\s+\$(\w+)/g,
+    // Process different PHPDoc tags
+    this.processTag(comment, commentOffset, /@param\s+/g, '$', document, builder, (match, typeStr, offset) => {
+      // Also highlight parameter name
+      const paramMatch = comment.substring(offset + typeStr.length).match(/^\s*\$(\w+)/);
+      if (paramMatch) {
+        const paramOffset = offset + typeStr.length + paramMatch.index! + paramMatch[0].indexOf('$');
+        const position = document.positionAt(commentOffset + paramOffset);
+        builder.push(
+          position.line,
+          position.character,
+          paramMatch[1].length + 1,
+          this.encodeTokenType(SemanticTokenType.Variable),
+          0
+        );
+      }
+    });
 
-      // @return Type Description
-      /@return\s+([^\s*]+)/g,
+    this.processTag(comment, commentOffset, /@return\s+/g, null, document, builder);
+    this.processTag(comment, commentOffset, /@var\s+/g, '$', document, builder);
+    this.processTag(comment, commentOffset, /@throws\s+/g, null, document, builder);
+    this.processTag(comment, commentOffset, /@extends\s+/g, null, document, builder);
+    this.processTag(comment, commentOffset, /@implements\s+/g, null, document, builder);
 
-      // @var Type Description or @var Type $name
-      /@var\s+([^\s$*]+)/g,
+    this.processTag(comment, commentOffset, /@property(?:-read|-write)?\s+/g, '$', document, builder, (match, typeStr, offset) => {
+      // Also highlight property name
+      const propMatch = comment.substring(offset + typeStr.length).match(/^\s*\$(\w+)/);
+      if (propMatch) {
+        const propOffset = offset + typeStr.length + propMatch.index! + propMatch[0].indexOf('$');
+        const position = document.positionAt(commentOffset + propOffset);
+        builder.push(
+          position.line,
+          position.character,
+          propMatch[1].length + 1,
+          this.encodeTokenType(SemanticTokenType.Property),
+          0
+        );
+      }
+    });
 
-      // @throws Type
-      /@throws\s+([^\s*]+)/g,
-
-      // @method Type name() or @method name()
-      /@method\s+(?:([^\s(]+)\s+)?(\w+)\s*\(/g,
-
-      // @property Type $name
-      /@property(?:-read|-write)?\s+([^\s$]+)\s+\$(\w+)/g,
-
-      // @extends Type
-      /@extends\s+([^\s*]+)/g,
-
-      // @implements Type
-      /@implements\s+([^\s*]+)/g,
-
-      // @template T, @template T of Type
-      /@template\s+(\w+)(?:\s+of\s+([^\s*]+))?/g,
-
-      // @phpstan-type AliasName Type
-      /@phpstan-type\s+(\w+)\s+([^\s*]+)/g,
-
-      // @psalm-type AliasName = Type
-      /@psalm-type\s+(\w+)\s*=\s*([^\s*]+)/g,
-    ];
-
-    for (const pattern of typeTagPatterns) {
-      let match: RegExpExecArray | null;
-      pattern.lastIndex = 0; // Reset regex state
-
-      while ((match = pattern.exec(comment)) !== null) {
-        // Extract type string(s) from the match
-        const typeStrings: Array<{ type: string; offset: number }> = [];
-
-        // Different patterns have types at different capture groups
-        if (match[1] && this.isTypeString(match[1])) {
-          const offset = match.index + match[0].indexOf(match[1]);
-          typeStrings.push({ type: match[1], offset });
-        }
-        if (match[2] && this.isTypeString(match[2]) && match[0].includes(' of ')) {
-          // Template bound type
-          const offset = match.index + match[0].indexOf(match[2]);
-          typeStrings.push({ type: match[2], offset });
-        }
-
-        // Parse each type string
-        for (const { type: typeString, offset: typeOffset } of typeStrings) {
-          const absoluteOffset = commentOffset + typeOffset;
-          this.parseAndEmitTokens(typeString, absoluteOffset, document, builder);
-        }
-
-        // Handle parameter names (@param)
-        if (match[0].startsWith('@param') && match[2]) {
-          const paramName = match[2];
-          const paramOffset = match.index + match[0].indexOf('$' + paramName);
-          const position = document.positionAt(commentOffset + paramOffset);
-          builder.push(
-            position.line,
-            position.character,
-            paramName.length + 1, // Include $
-            this.encodeTokenType(SemanticTokenType.Variable),
-            0
-          );
-        }
-
-        // Handle property names (@property)
-        if (match[0].startsWith('@property') && match[2]) {
-          const propName = match[2];
-          const propOffset = match.index + match[0].indexOf('$' + propName);
-          const position = document.positionAt(commentOffset + propOffset);
-          builder.push(
-            position.line,
-            position.character,
-            propName.length + 1, // Include $
-            this.encodeTokenType(SemanticTokenType.Property),
-            0
-          );
+    // Handle @template with optional bounds
+    const templateRegex = /@template\s+(\w+)(?:\s+of\s+)?/g;
+    let templateMatch;
+    while ((templateMatch = templateRegex.exec(comment)) !== null) {
+      if (templateMatch[0].includes(' of ')) {
+        const typeStartOffset = templateMatch.index + templateMatch[0].length;
+        const typeString = this.extractTypeString(comment.substring(typeStartOffset), null);
+        if (typeString) {
+          this.parseAndEmitTokens(typeString, commentOffset + typeStartOffset, document, builder);
         }
       }
     }
+
+    // Handle @phpstan-type and @psalm-type
+    const typeAliasRegex = /@(?:phpstan-type|psalm-type)\s+\w+\s*=?\s*/g;
+    let typeAliasMatch;
+    while ((typeAliasMatch = typeAliasRegex.exec(comment)) !== null) {
+      const typeStartOffset = typeAliasMatch.index + typeAliasMatch[0].length;
+      const typeString = this.extractTypeString(comment.substring(typeStartOffset), null);
+      if (typeString) {
+        this.parseAndEmitTokens(typeString, commentOffset + typeStartOffset, document, builder);
+      }
+    }
+  }
+
+  /**
+   * Process a specific PHPDoc tag and extract type information
+   */
+  private processTag(
+    comment: string,
+    commentOffset: number,
+    tagRegex: RegExp,
+    stopChar: string | null,
+    document: vscode.TextDocument,
+    builder: vscode.SemanticTokensBuilder,
+    callback?: (match: RegExpExecArray, typeString: string, offset: number) => void
+  ): void {
+    let match: RegExpExecArray | null;
+    tagRegex.lastIndex = 0;
+
+    while ((match = tagRegex.exec(comment)) !== null) {
+      const typeStartOffset = match.index + match[0].length;
+      const remainingText = comment.substring(typeStartOffset);
+
+      const typeString = this.extractTypeString(remainingText, stopChar);
+
+      if (typeString && this.isTypeString(typeString)) {
+        this.parseAndEmitTokens(typeString, commentOffset + typeStartOffset, document, builder);
+
+        if (callback) {
+          callback(match, typeString, typeStartOffset);
+        }
+      }
+    }
+  }
+
+  /**
+   * Extract a type string from text, handling balanced brackets/braces/parens
+   */
+  private extractTypeString(text: string, stopChar: string | null): string {
+    let depth = 0;
+    let inAngleBrackets = 0;
+    let inBraces = 0;
+    let inParens = 0;
+    let i = 0;
+
+    // Skip leading whitespace
+    while (i < text.length && /\s/.test(text[i])) {
+      i++;
+    }
+
+    const start = i;
+
+    while (i < text.length) {
+      const char = text[i];
+
+      // Track bracket depth
+      if (char === '<') {
+        inAngleBrackets++;
+      } else if (char === '>') {
+        inAngleBrackets--;
+      } else if (char === '{') {
+        inBraces++;
+      } else if (char === '}') {
+        inBraces--;
+      } else if (char === '(') {
+        inParens++;
+      } else if (char === ')') {
+        inParens--;
+      }
+
+      depth = inAngleBrackets + inBraces + inParens;
+
+      // Stop conditions when at depth 0
+      if (depth === 0) {
+        // Stop at stop character (e.g., '$' for @param)
+        if (stopChar && char === stopChar) {
+          break;
+        }
+
+        // Stop at newline followed by asterisk (next line in multi-line comment)
+        if (char === '\n' && i + 1 < text.length && text[i + 1] === '*') {
+          break;
+        }
+
+        // Stop at comment end marker
+        if (char === '*' && i + 1 < text.length && text[i + 1] === '/') {
+          break;
+        }
+
+        // Stop at double space or tab (likely start of description)
+        if (i > start && char === ' ' && i + 1 < text.length) {
+          const nextChar = text[i + 1];
+          // If next is space, tab, newline, or certain punctuation, stop
+          if (nextChar === ' ' || nextChar === '\t' || nextChar === '\n' || nextChar === '*') {
+            break;
+          }
+          // If followed by common description words, stop
+          const remaining = text.substring(i + 1);
+          if (/^(the|a|an|this|that|returns|whether|if|when|for|to|description|desc)/i.test(remaining)) {
+            break;
+          }
+        }
+
+        // Stop at @tag (next tag)
+        if (char === '@' && i > start) {
+          break;
+        }
+      }
+
+      i++;
+    }
+
+    return text.substring(start, i).trim();
   }
 
   /**

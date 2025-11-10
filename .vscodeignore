@@ -8,3 +8,4 @@ node_modules/**
 .git/**
 *.log
 INVESTIGATION_AND_SOLUTION.md
+test.php

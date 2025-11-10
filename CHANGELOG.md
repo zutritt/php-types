@@ -1,5 +1,19 @@
 # Change Log
 
+## [2.0.1] - 2025-11-10
+
+### Fixed
+- **Single-line PHPDoc comments**: Fixed type extraction for single-line PHPDoc blocks with complex types
+  - Now correctly handles types with spaces: `array{foo: int, bar: string}`
+  - Properly balances brackets/braces/parens: `callable(int, string): bool`
+  - Stops at appropriate boundaries (`*/`, `$`, descriptions)
+  - Works with all PHPStan syntax in single-line comments
+
+### Technical Details
+- Replaced simple regex patterns with balanced bracket parsing
+- Added `extractTypeString()` method that tracks bracket/brace/paren depth
+- Improved stop condition detection for single-line vs multi-line comments
+
 ## [2.0.0] - 2025-11-10
 
 ### Major Rewrite: Semantic Token Provider
