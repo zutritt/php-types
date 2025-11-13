@@ -3,7 +3,7 @@
   "displayName": "PHP Doc Extended",
   "description": "PHP Doc Extended with generics, templates, inheritance and more.",
   "icon": "res/icon.png",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "publisher": "ErnstStavroBlofeld",
   "repository": {
     "url": "https://github.com/ErnstStavroBlofeld/php-types"
@@ -39,6 +39,9 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "test": "npm run test:parser && npm run test:extractor",
+    "test:parser": "node test-parser.js",
+    "test:extractor": "node test/typeExtractor.test.js",
     "pretest": "npm run compile"
   },
   "dependencies": {

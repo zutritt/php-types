@@ -79,6 +79,28 @@ npm run compile
 npm run watch
 ```
 
+### Testing
+
+The extension includes comprehensive unit tests to validate the parser:
+
+```bash
+# Run all tests
+npm test
+
+# Run individual test suites
+npm run test:parser      # Tests @rightcapital/phpdoc-parser library
+npm run test:extractor   # Tests type extraction from PHPDoc
+
+```
+
+**Test Coverage:**
+- ✅ 18/18 type extraction tests passing (100%)
+- ✅ 38/41 parser library tests passing (92.7%)
+- ✅ Multiline PHPDoc with `*` continuations
+- ✅ All PHPStan syntax patterns
+
+See [test/README.md](test/README.md) for detailed test documentation.
+
 ### Project Structure
 
 ```

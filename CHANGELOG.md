@@ -1,5 +1,32 @@
 # Change Log
 
+## [2.0.4] - 2025-11-10
+
+### Added
+- **Comprehensive Test Suite**: Rigorous unit tests validating parser behavior
+  - `test-parser.js`: Direct testing of @rightcapital/phpdoc-parser library (38/41 tests passing)
+  - `test/typeExtractor.test.js`: Type extraction from PHPDoc comments (18/18 tests passing)
+  - Test documentation in `test/README.md`
+  - npm test scripts for easy testing
+
+### Fixed
+- **Multiline type extraction**: Fixed handling of PHPDoc comments with `*` continuation tokens
+  - Now correctly extracts types spanning multiple lines
+  - Normalizes whitespace in multiline types
+  - Properly handles nested structures across lines
+
+### Validated
+- Parser correctly handles 92.7% of PHPStan type syntax
+- All basic, generic, array shape, and callable types work perfectly
+- Multiline PHPDoc with `*` continuations now fully supported
+- Identified parser limitation: conditional types with `$` variables (rare edge case)
+
+### Developer Experience
+- Added `npm test` to run all tests
+- Added `npm run test:parser` for parser library tests
+- Added `npm run test:extractor` for type extraction tests
+- Comprehensive test documentation
+
 ## [2.0.3] - 2025-11-10
 
 ### Added

@@ -12,3 +12,5 @@ TESTING.md
 test.php
 test-verification.php
 comprehensive-test.php
+test-parser.js
+test/**
