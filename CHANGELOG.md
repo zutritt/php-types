@@ -1,5 +1,39 @@
 # Change Log
 
+## [2.0.3] - 2025-11-10
+
+### Added
+- **Comprehensive PHPStan tag support**: Added support for 40+ PHPDoc tags
+  - `@template`, `@template T of Type` with bounds
+  - `@extends`, `@implements`, `@require-extends`, `@require-implements`
+  - `@mixin`, `@use` for traits
+  - `@phpstan-type`, `@phpstan-import-type` with aliases
+  - `@phpstan-assert`, `@phpstan-assert-if-true`, `@phpstan-assert-if-false`
+  - `@phpstan-self-out`, `@phpstan-this-out`
+  - `@param-out`, `@param-later-invoked-callable`, `@param-immediately-invoked-callable`, `@param-closure-this`
+  - `@method` with full signature parsing (static, return types, parameters)
+  - And many more!
+
+### Improved
+- **Better type extraction**: Enhanced type string extraction for complex patterns
+- **Expanded keyword support**: Added 20+ new PHPStan keywords
+  - `non-zero-int`, `pure-closure`, `closed-resource`, `open-resource`
+  - `never-return`, `never-returns`, `no-return`
+  - `template-type`, `new` (constructor return types)
+  - `min`, `max` (for integer ranges)
+- **Method signature parsing**: Properly highlights return types and parameter types in `@method` tags
+
+### Fixed
+- Complex types with special syntax now parse correctly
+- Negated types (`!string`, `!null`)
+- Conditional return types (`($x is int ? true : false)`)
+- Template types with bounds
+- Import type aliases
+
+### Test Coverage
+- Added `comprehensive-test.php` with 100+ real-world PHPStan examples
+- Covers all supported tag types and syntax patterns
+
 ## [2.0.2] - 2025-11-10
 
 ### Added

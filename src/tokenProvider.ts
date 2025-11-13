@@ -105,46 +105,37 @@ export class PhpDocSemanticTokensProvider implements vscode.DocumentSemanticToke
     document: vscode.TextDocument,
     builder: vscode.SemanticTokensBuilder
   ): void {
-    // Process different PHPDoc tags
-    this.processTag(comment, commentOffset, /@param\s+/g, '$', document, builder, (match, typeStr, offset) => {
-      // Also highlight parameter name
-      const paramMatch = comment.substring(offset + typeStr.length).match(/^\s*\$(\w+)/);
-      if (paramMatch) {
-        const paramOffset = offset + typeStr.length + paramMatch.index! + paramMatch[0].indexOf('$');
-        const position = document.positionAt(commentOffset + paramOffset);
-        builder.push(
-          position.line,
-          position.character,
-          paramMatch[1].length + 1,
-          this.encodeTokenType(SemanticTokenType.Variable),
-          0
-        );
-      }
-    });
+    // Tags with "Type $variable" pattern
+    this.processTag(comment, commentOffset, /@param\s+/g, '$', document, builder, this.highlightVariable.bind(this));
+    this.processTag(comment, commentOffset, /@param-out\s+/g, '$', document, builder, this.highlightVariable.bind(this));
+    this.processTag(comment, commentOffset, /@var\s+/g, '$', document, builder, this.highlightVariable.bind(this));
+    this.processTag(comment, commentOffset, /@property(?:-read|-write)?\s+/g, '$', document, builder, this.highlightProperty.bind(this));
 
+    // Tags with just "Type" pattern (no variable)
     this.processTag(comment, commentOffset, /@return\s+/g, null, document, builder);
-    this.processTag(comment, commentOffset, /@var\s+/g, '$', document, builder);
     this.processTag(comment, commentOffset, /@throws\s+/g, null, document, builder);
     this.processTag(comment, commentOffset, /@extends\s+/g, null, document, builder);
     this.processTag(comment, commentOffset, /@implements\s+/g, null, document, builder);
+    this.processTag(comment, commentOffset, /@require-extends\s+/g, null, document, builder);
+    this.processTag(comment, commentOffset, /@require-implements\s+/g, null, document, builder);
+    this.processTag(comment, commentOffset, /@mixin\s+/g, null, document, builder);
+    this.processTag(comment, commentOffset, /@use\s+/g, null, document, builder);
 
-    this.processTag(comment, commentOffset, /@property(?:-read|-write)?\s+/g, '$', document, builder, (match, typeStr, offset) => {
-      // Also highlight property name
-      const propMatch = comment.substring(offset + typeStr.length).match(/^\s*\$(\w+)/);
-      if (propMatch) {
-        const propOffset = offset + typeStr.length + propMatch.index! + propMatch[0].indexOf('$');
-        const position = document.positionAt(commentOffset + propOffset);
-        builder.push(
-          position.line,
-          position.character,
-          propMatch[1].length + 1,
-          this.encodeTokenType(SemanticTokenType.Property),
-          0
-        );
-      }
-    });
+    // PHPStan-specific tags
+    this.processTag(comment, commentOffset, /@phpstan-self-out\s+/g, null, document, builder);
+    this.processTag(comment, commentOffset, /@phpstan-this-out\s+/g, null, document, builder);
 
-    // Handle @template with optional bounds
+    // @param with special modifiers
+    this.processTag(comment, commentOffset, /@param-later-invoked-callable\s+/g, '$', document, builder, this.highlightVariable.bind(this));
+    this.processTag(comment, commentOffset, /@param-immediately-invoked-callable\s+/g, '$', document, builder, this.highlightVariable.bind(this));
+    this.processTag(comment, commentOffset, /@param-closure-this\s+/g, null, document, builder);
+
+    // @phpstan-assert tags (Type $variable pattern)
+    this.processTag(comment, commentOffset, /@phpstan-assert\s+/g, '$', document, builder);
+    this.processTag(comment, commentOffset, /@phpstan-assert-if-true\s+/g, null, document, builder);
+    this.processTag(comment, commentOffset, /@phpstan-assert-if-false\s+/g, null, document, builder);
+
+    // @template with optional bounds: @template T, @template T of Type
     const templateRegex = /@template\s+(\w+)(?:\s+of\s+)?/g;
     let templateMatch;
     while ((templateMatch = templateRegex.exec(comment)) !== null) {
@@ -157,14 +148,137 @@ export class PhpDocSemanticTokensProvider implements vscode.DocumentSemanticToke
       }
     }
 
-    // Handle @phpstan-type and @psalm-type
-    const typeAliasRegex = /@(?:phpstan-type|psalm-type)\s+\w+\s*=?\s*/g;
-    let typeAliasMatch;
-    while ((typeAliasMatch = typeAliasRegex.exec(comment)) !== null) {
-      const typeStartOffset = typeAliasMatch.index + typeAliasMatch[0].length;
+    // @phpstan-type AliasName Type
+    const phpstanTypeRegex = /@phpstan-type\s+(\w+)\s+/g;
+    let phpstanTypeMatch;
+    while ((phpstanTypeMatch = phpstanTypeRegex.exec(comment)) !== null) {
+      const typeStartOffset = phpstanTypeMatch.index + phpstanTypeMatch[0].length;
       const typeString = this.extractTypeString(comment.substring(typeStartOffset), null);
       if (typeString) {
         this.parseAndEmitTokens(typeString, commentOffset + typeStartOffset, document, builder);
+      }
+    }
+
+    // @phpstan-import-type AliasName from Class
+    // @phpstan-import-type AliasName from Class as NewName
+    // Just highlight the "from Class" part
+    const importTypeRegex = /@phpstan-import-type\s+\w+\s+from\s+/g;
+    let importTypeMatch;
+    while ((importTypeMatch = importTypeRegex.exec(comment)) !== null) {
+      const typeStartOffset = importTypeMatch.index + importTypeMatch[0].length;
+      const remaining = comment.substring(typeStartOffset);
+      // Extract class name (stop at "as" or whitespace)
+      const classMatch = remaining.match(/^(\\?[\w\\]+)/);
+      if (classMatch) {
+        this.parseAndEmitTokens(classMatch[1], commentOffset + typeStartOffset, document, builder);
+      }
+    }
+
+    // @psalm-type AliasName = Type
+    const psalmTypeRegex = /@psalm-type\s+(\w+)\s*=\s*/g;
+    let psalmTypeMatch;
+    while ((psalmTypeMatch = psalmTypeRegex.exec(comment)) !== null) {
+      const typeStartOffset = psalmTypeMatch.index + psalmTypeMatch[0].length;
+      const typeString = this.extractTypeString(comment.substring(typeStartOffset), null);
+      if (typeString) {
+        this.parseAndEmitTokens(typeString, commentOffset + typeStartOffset, document, builder);
+      }
+    }
+
+    // @method [static] ReturnType methodName(ArgumentType $arg, ...)
+    this.processMethodTags(comment, commentOffset, document, builder);
+  }
+
+  /**
+   * Highlight variable name callback
+   */
+  private highlightVariable(match: RegExpExecArray, typeStr: string, offset: number, comment: string, commentOffset: number, document: vscode.TextDocument, builder: vscode.SemanticTokensBuilder): void {
+    const paramMatch = comment.substring(offset + typeStr.length).match(/^\s*\$(\w+)/);
+    if (paramMatch) {
+      const paramOffset = offset + typeStr.length + paramMatch.index! + paramMatch[0].indexOf('$');
+      const position = document.positionAt(commentOffset + paramOffset);
+      builder.push(
+        position.line,
+        position.character,
+        paramMatch[1].length + 1,
+        this.encodeTokenType(SemanticTokenType.Variable),
+        0
+      );
+    }
+  }
+
+  /**
+   * Highlight property name callback
+   */
+  private highlightProperty(match: RegExpExecArray, typeStr: string, offset: number, comment: string, commentOffset: number, document: vscode.TextDocument, builder: vscode.SemanticTokensBuilder): void {
+    const propMatch = comment.substring(offset + typeStr.length).match(/^\s*\$(\w+)/);
+    if (propMatch) {
+      const propOffset = offset + typeStr.length + propMatch.index! + propMatch[0].indexOf('$');
+      const position = document.positionAt(commentOffset + propOffset);
+      builder.push(
+        position.line,
+        position.character,
+        propMatch[1].length + 1,
+        this.encodeTokenType(SemanticTokenType.Property),
+        0
+      );
+    }
+  }
+
+  /**
+   * Process @method tags which have complex syntax
+   * @method [static] ReturnType methodName(ArgType $arg = default)
+   */
+  private processMethodTags(comment: string, commentOffset: number, document: vscode.TextDocument, builder: vscode.SemanticTokensBuilder): void {
+    // Match @method, optional "static", then return type, then method name, then parameters
+    const methodRegex = /@method\s+(?:static\s+)?/g;
+    let methodMatch;
+
+    while ((methodMatch = methodRegex.exec(comment)) !== null) {
+      const afterTag = comment.substring(methodMatch.index + methodMatch[0].length);
+
+      // Extract return type (everything before method name with parenthesis)
+      // Return type ends when we hit: methodName(
+      const returnTypeMatch = afterTag.match(/^([^(]+?)\s+(\w+)\s*\(/);
+      if (returnTypeMatch) {
+        const returnType = returnTypeMatch[1].trim();
+        const returnTypeOffset = methodMatch.index + methodMatch[0].length;
+
+        // Parse return type
+        if (this.isTypeString(returnType)) {
+          this.parseAndEmitTokens(returnType, commentOffset + returnTypeOffset, document, builder);
+        }
+
+        // Extract and parse parameter types from the method signature
+        const paramStart = returnTypeMatch.index! + returnTypeMatch[0].length - 1; // -1 for the (
+        const remaining = afterTag.substring(paramStart);
+
+        // Find the matching closing paren
+        let parenDepth = 0;
+        let paramEnd = 0;
+        for (let i = 0; i < remaining.length; i++) {
+          if (remaining[i] === '(') parenDepth++;
+          else if (remaining[i] === ')') {
+            parenDepth--;
+            if (parenDepth === 0) {
+              paramEnd = i;
+              break;
+            }
+          }
+        }
+
+        if (paramEnd > 0) {
+          const params = remaining.substring(1, paramEnd); // Inside parentheses
+          // Parse each parameter: Type $name
+          const paramMatches = params.matchAll(/([^,\s$]+)\s+\$\w+/g);
+          for (const paramMatch of paramMatches) {
+            const paramType = paramMatch[1].trim();
+            const paramTypeOffset = methodMatch.index + methodMatch[0].length + paramStart + paramMatch.index!;
+            if (this.isTypeString(paramType)) {
+              this.parseAndEmitTokens(paramType, commentOffset + paramTypeOffset, document, builder);
+            }
+          }
+        }
       }
     }
   }
@@ -179,7 +293,7 @@ export class PhpDocSemanticTokensProvider implements vscode.DocumentSemanticToke
     stopChar: string | null,
     document: vscode.TextDocument,
     builder: vscode.SemanticTokensBuilder,
-    callback?: (match: RegExpExecArray, typeString: string, offset: number) => void
+    callback?: (match: RegExpExecArray, typeString: string, offset: number, comment: string, commentOffset: number, document: vscode.TextDocument, builder: vscode.SemanticTokensBuilder) => void
   ): void {
     let match: RegExpExecArray | null;
     tagRegex.lastIndex = 0;
@@ -194,7 +308,7 @@ export class PhpDocSemanticTokensProvider implements vscode.DocumentSemanticToke
         this.parseAndEmitTokens(typeString, commentOffset + typeStartOffset, document, builder);
 
         if (callback) {
-          callback(match, typeString, typeStartOffset);
+          callback(match, typeString, typeStartOffset, comment, commentOffset, document, builder);
         }
       }
     }

@@ -83,7 +83,7 @@ export const PHPDOC_KEYWORDS = new Set([
   'class-string', 'trait-string', 'interface-string', 'enum-string',
 
   // Integer types
-  'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int',
+  'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int', 'non-zero-int',
   'int-mask', 'int-mask-of',
 
   // Array types
@@ -91,11 +91,22 @@ export const PHPDOC_KEYWORDS = new Set([
   'key-of', 'value-of',
 
   // Callable types
-  'pure-callable', 'closure',
+  'pure-callable', 'closure', 'pure-closure',
+
+  // Resource types
+  'closed-resource', 'open-resource',
 
   // Special types
   'true', 'false', 'self', 'static', 'parent', '$this',
+  'never-return', 'never-returns', 'no-return',
+  'template-type', 'new',
 
   // Type modifiers
   'non-empty', 'empty',
+
+  // Reserved words that appear in types
+  'is', 'of', 'from', 'as',
+
+  // Common bounds
+  'min', 'max',
 ]);
